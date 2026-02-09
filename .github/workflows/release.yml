@@ -1,0 +1,61 @@
+name: Build and Release Documents
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create output directory
+        run: mkdir -p out
+
+      - name: Build documents with make
+        run: make all
+
+      - name: List generated files
+        run: ls -lh out/
+
+      - name: Create zip archive
+        run: |
+          cd out
+          zip -r ../documents.zip .
+          cd ..
+
+      - name: Get tag name
+        id: tag
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=manual-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          name: Release ${{ steps.tag.outputs.tag_name }}
+          body: |
+            Automatically generated documents in EPUB and PDF formats.
+
+            ## Contents
+            This release contains all markdown documents from the `src/` directory converted to both EPUB and PDF formats.
+
+            Download `documents.zip` and extract to access all files.
+          files: |
+            documents.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
