@@ -1,7 +1,20 @@
 # GNUmakefile for converting markdown files to epub and pdf using pandock
-# pandock = podman run --rm -v "$(pwd):/data" pandoc/latex
+# Automatically detects and uses podman or docker (with fallback)
 
-PANDOCK = podman run --rm -v "$$(pwd):/data:Z" pandoc/latex
+# Detect container runtime (podman or docker)
+CONTAINER_RUNTIME := $(shell command -v podman 2>/dev/null)
+ifeq ($(CONTAINER_RUNTIME),)
+    CONTAINER_RUNTIME := $(shell command -v docker 2>/dev/null)
+    ifeq ($(CONTAINER_RUNTIME),)
+        $(error Neither podman nor docker found. Please install one of them.)
+    else
+        # Docker: run as current user to avoid permission issues
+        PANDOCK = $(CONTAINER_RUNTIME) run --rm --user $$(id -u):$$(id -g) -v "$$(pwd):/data" pandoc/latex
+    endif
+else
+    # Podman: use :Z for SELinux relabeling
+    PANDOCK = $(CONTAINER_RUNTIME) run --rm -v "$$(pwd):/data:Z" pandoc/latex
+endif
 
 SRC_DIR = src
 OUT_DIR = out
@@ -58,6 +71,8 @@ help:
 	@echo "  make clean       - Remove all generated .epub and .pdf files"
 	@echo "  make clean-epub  - Remove all generated .epub files"
 	@echo "  make clean-pdf   - Remove all generated .pdf files"
+	@echo ""
+	@echo "Container runtime: $(CONTAINER_RUNTIME)"
 	@echo ""
 	@echo "Markdown files found:"
 	@echo "  $(MD_FILES)"
